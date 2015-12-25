@@ -8,14 +8,12 @@ CXX = g++
 STRIP = strip
 
 # output from sdl-config
-SDL_FLAGS=-I/usr/include/SDL -I/usr/include/glib-2.0 -I/usr/lib/arm-linux-gnueabihf/glib-2.0/include \
-	-I/opt/vc/include -I/opt/vc/include/interface/vcos/pthreads \
-    -I/opt/vc/include/interface/vmcs_host/linux
-SDL_LIBS=-lSDL -lm -ldl -lglib-2.0
+SDL_FLAGS=-I/usr/include/SDL2 -I/usr/include/glib-2.0 -I/usr/lib/arm-linux-gnueabihf/glib-2.0/include
+SDL_LIBS=-lSDL2 -lm -ldl -lglib-2.0
 
 CFLAGS = $(SDL_FLAGS) -O2 -funroll-loops -Wextra -Werror
 CXXFLAGS = $(SDL_FLAGS) -O2 -funroll-loops -Wall
-LIBS = $(SDL_LIBS)  -L/opt/vc/lib -lbcm_host -lGLESv2 -lrt
+LIBS = $(SDL_LIBS)  -L/opt/vc/lib -lrt
 
 TARGET = $(PROG_NAME)
 

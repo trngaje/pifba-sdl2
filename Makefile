@@ -8,23 +8,23 @@
 
 ####### Compiler, tools and options
 
-CC	=	arm-linux-gnueabihf-gcc
-CXX	=	arm-linux-gnueabihf-g++
+CC	=	gcc
+CXX	=	g++
 
-CFLAGS	= -march=armv6 -mfpu=vfp -mfloat-abi=hard -pipe -Wall -W -Wno-write-strings -O3 -DOOPSWARE_FIX -D_T="" -DNEOGEO_HACKS -D__cdecl="" 
+CFLAGS	= -marm -march=armv6 -mfpu=vfp -mfloat-abi=hard -pipe -Wall -W -Wno-write-strings -O3 -DOOPSWARE_FIX -D_T="" -DNEOGEO_HACKS -D__cdecl="" 
 CFLAGS += -D__fastcall="" -DUSE_SPEEDHACKS -DNEO_DISPLAY_OVERSCAN -falign-functions=32 -falign-loops -falign-labels -falign-jumps -fomit-frame-pointer -ffast-math 
 CFLAGS += -fexpensive-optimizations -finline -finline-functions -mstructure-size-boundary=32 -frename-registers 
 
-CXXFLAGS = -march=armv6 -mfpu=vfp -mfloat-abi=hard -pipe -DQWS -fno-exceptions -fno-rtti -Wall -W -Wno-write-strings -O3 -DOOPSWARE_FIX -D_T="" -DNEOGEO_HACKS 
+CXXFLAGS = -marm -march=armv6 -mfpu=vfp -mfloat-abi=hard -pipe -DQWS -fno-exceptions -fno-rtti -Wall -W -Wno-write-strings -O3 -DOOPSWARE_FIX -D_T="" -DNEOGEO_HACKS 
 CXXFLAGS += -D__cdecl="" -D__fastcall="" -DUSE_SPEEDHACKS -DNEO_DISPLAY_OVERSCAN -falign-functions=32 -falign-loops -falign-labels -falign-jumps -fomit-frame-pointer -ffast-math 
 CXXFLAGS += -fexpensive-optimizations -finline -finline-functions -mstructure-size-boundary=32 -frename-registers 
 
 INCPATH	= -I./rpi -I./burn -I./burn/neogeo -I./burn/capcom -I./burn/cave -I./burn/toaplan -I./cpu/cyclone \
 	-I./cpu/z80 -I./cpu/cz80 -I./cpu/nec -I./cpu/sh2 -I./burn/misc -I$(SDKSTAGE)/opt/vc/include -I$(SDKSTAGE)/opt/vc/include/interface/vcos/pthreads \
-	-I$(SDKSTAGE)/opt/vc/include/interface/vmcs_host/linux -I/usr/include/SDL -I/usr/include/glib-2.0 -I/usr/lib/arm-linux-gnueabihf/glib-2.0/include 
-LINK	= arm-linux-gnueabihf-g++
+	-I$(SDKSTAGE)/opt/vc/include/interface/vmcs_host/linux -I/usr/include/SDL2 -I/usr/include/glib-2.0 -I/usr/lib/arm-linux-gnueabihf/glib-2.0/include 
+LINK	= g++
 LFLAGS	= 
-LIBS	= -lz -lpthread -lm -lpthread -lSDL -L/opt/vc/lib -lbcm_host -lGLESv2 -lEGL -lglib-2.0 -lasound -lrt
+LIBS	= -lz -lpthread -lm -lpthread -lSDL2 -L/opt/vc/lib -lGLESv2 -lglib-2.0 -lasound -lrt
 
 TAR		= tar -cf
 GZIP	= gzip -9f
@@ -555,7 +555,7 @@ all: $(TARGET)
 
 $(TARGET): $(OBJECTS) 
 	$(LINK) $(LFLAGS) -o $(TARGET) $(OBJECTS) $(LIBS) 
-	strip $(TARGET)
+	#strip $(TARGET)
 
 clean:
 	-rm -f $(OBJECTS) $(TARGET)

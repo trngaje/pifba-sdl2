@@ -38,18 +38,18 @@ enum {
 
 // Default key and joystick mappings
 
-#define RPI_KEY_A       SDLK_LCTRL
-#define RPI_KEY_B       SDLK_SPACE
-#define RPI_KEY_X       SDLK_LALT
-#define RPI_KEY_Y       SDLK_LSHIFT
-#define RPI_KEY_L       SDLK_z
-#define RPI_KEY_R       SDLK_x
-#define RPI_KEY_START   SDLK_RETURN
-#define RPI_KEY_SELECT  SDLK_TAB
-#define RPI_KEY_LEFT    SDLK_LEFT
-#define RPI_KEY_RIGHT   SDLK_RIGHT
-#define RPI_KEY_UP      SDLK_UP
-#define RPI_KEY_DOWN    SDLK_DOWN
+#define RPI_KEY_A       SDL_SCANCODE_LCTRL
+#define RPI_KEY_B       SDL_SCANCODE_SPACE
+#define RPI_KEY_X       SDL_SCANCODE_LALT
+#define RPI_KEY_Y       SDL_SCANCODE_LSHIFT
+#define RPI_KEY_L       SDL_SCANCODE_Z
+#define RPI_KEY_R       SDL_SCANCODE_X
+#define RPI_KEY_START   SDL_SCANCODE_RETURN
+#define RPI_KEY_SELECT  SDL_SCANCODE_TAB
+#define RPI_KEY_LEFT    SDL_SCANCODE_LEFT
+#define RPI_KEY_RIGHT   SDL_SCANCODE_RIGHT
+#define RPI_KEY_UP      SDL_SCANCODE_UP
+#define RPI_KEY_DOWN    SDL_SCANCODE_DOWN
 
 //player 2 keyboard defaults to disabled
 #define RPI_KEY_A_2       999
@@ -65,10 +65,10 @@ enum {
 #define RPI_KEY_UP_2      999
 #define RPI_KEY_DOWN_2    999
 
-#define RPI_KEY_QUIT    SDLK_ESCAPE
-//#define RPI_KEY_ACCEL   SDLK_BACKSPACE
-#define RPI_KEY_QLOAD   SDLK_F1
-#define RPI_KEY_QSAVE   SDLK_F2
+#define RPI_KEY_QUIT    SDL_SCANCODE_ESCAPE
+//#define RPI_KEY_ACCEL   SDL_SCANCODE_BACKSPACE
+#define RPI_KEY_QLOAD   SDL_SCANCODE_F1
+#define RPI_KEY_QSAVE   SDL_SCANCODE_F2
 
 //Default joy button configuration
 #define RPI_JOY_A       3

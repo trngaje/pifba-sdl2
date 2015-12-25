@@ -2,7 +2,6 @@
 #include "burner.h"
 #include "config.h"
 
-#include <bcm_host.h>
 #include <SDL.h>
 #include <assert.h>
 
@@ -12,8 +11,7 @@
 
 #include <glib.h>
 
-#include <EGL/egl.h>
-#include <EGL/eglext.h>
+#include <GLES/gl.h>
 
 static SDL_Surface* sdlscreen = NULL;
 
@@ -29,6 +27,8 @@ extern bool bShowFPS;
 
 static int surface_width;
 static int surface_height;
+static int output_width;
+static int output_height;
 
 unsigned char joy_buttons[2][32];
 unsigned char joy_axes[4][2];
@@ -39,6 +39,13 @@ int joyaxis_LR[4], joyaxis_UD[4];
 #define JOYUD 1
 
 static GKeyFile *gkeyfile=0;
+
+// MAC Nasty globals are nasty.
+SDL_GLContext glcontext;
+SDL_Window *window;
+
+// This is to retrieve the physical screen size, later used for GLES.
+SDL_DisplayMode current_videomode;
 
 static void open_config_file(void)
 {
@@ -85,7 +92,7 @@ void pi_initialize_input()
     //Open config file for reading below
     open_config_file();
     
-    //Configure keys from config file or defaults
+    //Configure keys from config file or defaults. The last parameter is the default value.
     pi_key[A_1] = get_integer_conf("Keyboard", "A_1", RPI_KEY_A);
     pi_key[B_1] = get_integer_conf("Keyboard", "B_1", RPI_KEY_B);
     pi_key[X_1] = get_integer_conf("Keyboard", "X_1", RPI_KEY_X);
@@ -173,8 +180,6 @@ void pi_initialize_input()
 
 void pi_parse_config_file (void)
 {
-    int i=0;
-
     open_config_file();
 
     config_options.display_smooth_stretch = get_integer_conf("Graphics", "DisplaySmoothStretch", 1);
@@ -184,7 +189,6 @@ void pi_parse_config_file (void)
     config_options.display_rotate = get_integer_conf("Graphics", "DisplayAutoRotate", 0);
 
     close_config_file();
-
 }
 
 
@@ -204,43 +208,18 @@ void pi_initialize()
 
 void pi_terminate(void)
 {
-    struct stat info;
-
     pi_deinit();
     deinit_SDL();
 
     exit(0);
 }
 
-// create two resources for 'page flipping'
-static DISPMANX_RESOURCE_HANDLE_T   resource0;
-static DISPMANX_RESOURCE_HANDLE_T   resource1;
-static DISPMANX_RESOURCE_HANDLE_T   resource_bg;
-
-// these are used for switching between the buffers
-//static DISPMANX_RESOURCE_HANDLE_T cur_res;
-//static DISPMANX_RESOURCE_HANDLE_T prev_res;
-//static DISPMANX_RESOURCE_HANDLE_T tmp_res;
-
-DISPMANX_ELEMENT_HANDLE_T dispman_element;
-DISPMANX_ELEMENT_HANDLE_T dispman_element_bg;
-DISPMANX_DISPLAY_HANDLE_T dispman_display;
-DISPMANX_UPDATE_HANDLE_T dispman_update;
-
 void gles2_create(int display_width, int display_height, int bitmap_width, int bitmap_height, int depth);
 void gles2_destroy();
-void gles2_palette_changed();
-
-EGLDisplay display = NULL;
-EGLSurface surface = NULL;
-static EGLContext context = NULL;
-static EGL_DISPMANX_WINDOW_T nativewindow;
-
 
 void exitfunc()
 {
     SDL_Quit();
-    bcm_host_deinit();
 }
 
 int init_SDL(void)
@@ -249,13 +228,15 @@ int init_SDL(void)
     joy[1]=0;
     joy[2]=0;
     joy[3]=0;
-    
-    if (SDL_Init(SDL_INIT_JOYSTICK) < 0) {
+
+ 
+    if (SDL_Init(SDL_INIT_JOYSTICK|SDL_INIT_VIDEO|SDL_INIT_EVENTS) < 0) {
         fprintf(stderr, "Unable to init SDL: %s\n", SDL_GetError());
         return(0);
     }
-    sdlscreen = SDL_SetVideoMode(0,0, 16, SDL_SWSURFACE);
-    
+   
+    SDL_GetCurrentDisplayMode(0, &current_videomode);
+ 
     //We handle up to four joysticks
     if(SDL_NumJoysticks())
     {
@@ -288,14 +269,10 @@ int init_SDL(void)
     //sq frig number of players for keyboard
     //joyCount=2;
 
-    SDL_EventState(SDL_ACTIVEEVENT,SDL_IGNORE);
     SDL_EventState(SDL_SYSWMEVENT,SDL_IGNORE);
-    SDL_EventState(SDL_VIDEORESIZE,SDL_IGNORE);
+    SDL_EventState(SDL_WINDOWEVENT,SDL_IGNORE);
     SDL_EventState(SDL_USEREVENT,SDL_IGNORE);
     SDL_ShowCursor(SDL_DISABLE);
-    
-    //Initialise dispmanx
-    bcm_host_init();
     
     //Clean exits, hopefully!
     atexit(exitfunc);
@@ -311,209 +288,54 @@ void deinit_SDL(void)
         sdlscreen = NULL;
     }
     SDL_Quit();
-    
-    bcm_host_deinit();
 }
-
-static uint32_t display_adj_width, display_adj_height;      //display size minus border
 
 void pi_setvideo_mode(int width, int height)
 {
-    
-    uint32_t display_width, display_height;
-    uint32_t display_x=0, display_y=0;
-    float display_ratio,game_ratio;
-    
-    VC_RECT_T dst_rect;
-    VC_RECT_T src_rect;
     
     surface_width = width;
     surface_height = height;
     
     VideoBuffer=(unsigned short *) calloc(1, width*height*4);
     
-    // get an EGL display connection
-    display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    assert(display != EGL_NO_DISPLAY);
-    
-    // initialize the EGL display connection
-    EGLBoolean result = eglInitialize(display, NULL, NULL);
-    assert(EGL_FALSE != result);
-    
-    // get an appropriate EGL frame buffer configuration
-    EGLint num_config;
-    EGLConfig config;
-    static const EGLint attribute_list[] =
-    {
-        EGL_RED_SIZE, 8,
-        EGL_GREEN_SIZE, 8,
-        EGL_BLUE_SIZE, 8,
-        EGL_ALPHA_SIZE, 8,
-        EGL_SURFACE_TYPE, EGL_WINDOW_BIT,
-        EGL_NONE
-    };
-    result = eglChooseConfig(display, attribute_list, &config, 1, &num_config);
-    assert(EGL_FALSE != result);
-    
-    result = eglBindAPI(EGL_OPENGL_ES_API);
-    assert(EGL_FALSE != result);
-    
-    // create an EGL rendering context
-    static const EGLint context_attributes[] =
-    {
-        EGL_CONTEXT_CLIENT_VERSION, 2,
-        EGL_NONE
-    };
-    context = eglCreateContext(display, config, EGL_NO_CONTEXT, context_attributes);
-    assert(context != EGL_NO_CONTEXT);
-    
-    // create an EGL window surface
-    int32_t success = graphics_get_display_size(0, &display_width, &display_height);
-    assert(success >= 0);
-    
-    display_adj_width = display_width - (config_options.option_display_border * 2);
-    display_adj_height = display_height - (config_options.option_display_border * 2);
-    
-    if (config_options.display_smooth_stretch)
-    {
-        //We use the dispmanx scaler to smooth stretch the display
-        //so GLES2 doesn't have to handle the performance intensive postprocessing
-        
-        uint32_t sx, sy;
-        
-        // Work out the position and size on the display
-        display_ratio = (float)display_width/(float)display_height;
-        game_ratio = (float)width/(float)height;
-        
-        display_x = sx = display_adj_width;
-        display_y = sy = display_adj_height;
-        
-        if(config_options.maintain_aspect_ratio || game_ratio < 1) {
-                if (game_ratio>display_ratio)
-                    sy = (float)display_adj_width/(float)game_ratio;
-                else
-                    sx = (float)display_adj_height*(float)game_ratio;
-        }
-        
-        // Centre bitmap on screen
-        display_x = (display_x - sx) / 2;
-        display_y = (display_y - sy) / 2;
-        
-        vc_dispmanx_rect_set( &dst_rect,
-                             display_x + config_options.option_display_border,
-                             display_y + config_options.option_display_border,
-                             sx, sy);
-    }
-    else
-        vc_dispmanx_rect_set( &dst_rect, config_options.option_display_border,
-                            config_options.option_display_border,
-                          display_adj_width, display_adj_height);
-    
-    if (config_options.display_smooth_stretch)
-        vc_dispmanx_rect_set( &src_rect, 0, 0, width << 16, height << 16);
-    else
-        vc_dispmanx_rect_set( &src_rect, 0, 0, display_adj_width << 16, display_adj_height << 16);
-    
-    dispman_display = vc_dispmanx_display_open(0);
-    dispman_update = vc_dispmanx_update_start(0);
-    dispman_element = vc_dispmanx_element_add(dispman_update, dispman_display,
-                                              10, &dst_rect, 0, &src_rect,
-                                              DISPMANX_PROTECTION_NONE, NULL, NULL, DISPMANX_NO_ROTATE);
-    
-    //Black background surface dimensions
-    vc_dispmanx_rect_set( &dst_rect, 0, 0, display_width, display_height );
-    vc_dispmanx_rect_set( &src_rect, 0, 0, 128 << 16, 128 << 16);
-    
-    //Create a blank background for the whole screen, make sure width is divisible by 32!
-    uint32_t crap;
-    resource_bg = vc_dispmanx_resource_create(VC_IMAGE_RGB565, 128, 128, &crap);
-    dispman_element_bg = vc_dispmanx_element_add(  dispman_update, dispman_display,
-                                                 9, &dst_rect, resource_bg, &src_rect,
-                                                 DISPMANX_PROTECTION_NONE, 0, 0,
-                                                 (DISPMANX_TRANSFORM_T) 0 );
-    
-    nativewindow.element = dispman_element;
-    if (config_options.display_smooth_stretch) {
-        nativewindow.width = width;
-        nativewindow.height = height;
-    }
-    else {
-        nativewindow.width = display_adj_width;
-        nativewindow.height = display_adj_height;
-    }
-    
-    vc_dispmanx_update_submit_sync(dispman_update);
-    
-    surface = eglCreateWindowSurface(display, config, &nativewindow, NULL);
-    assert(surface != EGL_NO_SURFACE);
-    
-    // connect the context to the surface
-    result = eglMakeCurrent(display, surface, surface, context);
-    assert(EGL_FALSE != result);
-    
-    //Smooth stretch the display size for GLES2 is the size of the bitmap
-    //otherwise let GLES2 upscale (NEAR) to the size of the display
-    if (config_options.display_smooth_stretch) 
-        gles2_create(width, height, width, height, 16);
-    else
-        gles2_create(display_adj_width, display_adj_height, width, height, 16);
+    window = SDL_CreateWindow(
+        "fba2x", 0, 0, width, height, 
+    	SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE);
+
+    glcontext = SDL_GL_CreateContext(window);
+
+    gles2_create(current_videomode.w, current_videomode.h, width, height, 16);    
 }
 
 void pi_deinit(void)
 {
     gles2_destroy();
-    // Release OpenGL resources
-    eglMakeCurrent( display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT );
-    eglDestroySurface( display, surface );
-    eglDestroyContext( display, context );
-    eglTerminate( display );
-    
-    dispman_update = vc_dispmanx_update_start( 0 );
-    vc_dispmanx_element_remove( dispman_update, dispman_element );
-    vc_dispmanx_element_remove( dispman_update, dispman_element_bg );
-    vc_dispmanx_update_submit_sync( dispman_update );
-    vc_dispmanx_resource_delete( resource0 );
-    vc_dispmanx_resource_delete( resource1 );
-    vc_dispmanx_resource_delete( resource_bg );
-    vc_dispmanx_display_close( dispman_display );
-    
+
     if(VideoBuffer) free(VideoBuffer);
     VideoBuffer=0;
+
+    // Destroy SDL2-driven GLES context
+    SDL_GL_DeleteContext(glcontext); 
+    SDL_DestroyWindow(window);
 }
 
 void gles2_draw(void * screen, int width, int height, int depth);
-extern EGLDisplay display;
-extern EGLSurface surface;
 
 void pi_video_flip()
 {
-    //  extern int throttle;
-    static int throttle=1;
-    static int save_throttle=0;
-    
-    if (throttle != save_throttle)
-    {
-        if(throttle)
-            eglSwapInterval(display, 1);
-        else
-            eglSwapInterval(display, 0);
-        
-        save_throttle=throttle;
-    }
-    
     //Draw to the screen
     gles2_draw(VideoBuffer, surface_width, surface_height, 16);
-    eglSwapBuffers(display, surface);
+    SDL_GL_SwapWindow(window);
 }
 
 int StatedLoad(int nSlot);
 int StatedSave(int nSlot);
 
-unsigned char *sdl_keys;
+const unsigned char *sdl_keys;
 
 void pi_process_events (void)
 {
-    int num=0, i;
+    int i;
     int hatmovement=0;
 
     //Process four joysticks
@@ -574,7 +396,7 @@ void pi_process_events (void)
                 break;
 
             case SDL_KEYDOWN:
-                sdl_keys = SDL_GetKeyState(NULL);
+                sdl_keys = SDL_GetKeyboardState(NULL);
                 
                 if (event.key.keysym.sym == SDLK_0)
                     bShowFPS = !bShowFPS;
@@ -591,7 +413,7 @@ void pi_process_events (void)
 //                }
                 break;
             case SDL_KEYUP:
-                sdl_keys = SDL_GetKeyState(NULL);
+                sdl_keys = SDL_GetKeyboardState(NULL);
                 break;
         }
         
@@ -679,7 +501,7 @@ unsigned long pi_joystick_read(int which1)
     
     if(sdl_keys)
     {
-        if(which1 == 0) {
+	if(which1 == 0) {
             if (sdl_keys[pi_key[L_1]] == SDL_PRESSED)       val |= GP2X_L;
             if (sdl_keys[pi_key[R_1]] == SDL_PRESSED)       val |= GP2X_R;
             if (sdl_keys[pi_key[X_1]] == SDL_PRESSED)       val |= GP2X_X;

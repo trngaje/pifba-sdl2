@@ -30,8 +30,6 @@
 #include <sys/mman.h>
 
 #include <glib.h>
-#include <bcm_host.h>
-
 
 //#include "./GFX/gfx_BG.h"
 //#include "./GFX/gfx_CAPEX.h"
@@ -80,16 +78,15 @@ int joyaxis_LR[4], joyaxis_UD[4];
 
 SDL_Joystick *joy[1];
 
-unsigned char *sdl_keys;
+const unsigned char *sdl_keys;
 
 static unsigned long fe_timer_read(void);
 static void fe_ProcessEvents (void);
 unsigned long pi_joystick_read(void);
 
-static void dispmanx_init(void);
-static void dispmanx_deinit(void);
-static void dispmanx_display(void);
 static void initSDL(void);
+static void freeSDL(void);
+void flipScreen(void);
 
 #define NUMKEYS 256
 static Uint16 pi_key[NUMKEYS];
@@ -197,9 +194,8 @@ int exit_prog(void)
 	//menage avant execution
 	free_memory();
 
-	dispmanx_deinit();
-
 	SDL_JoystickClose(0);
+	freeSDL();
 	SDL_Quit();
 
 	exit(0);
@@ -309,8 +305,8 @@ char ss_prg_credit(void)
 	{
 		drawSprite( credit , screen , 0 , 0 , 0 , 0 , 640 , 480 );
 		//SDL_Flip(screen);
-		dispmanx_display();
-		
+		flipScreen();	
+	
 		SDL_PollEvent(&event);
 		if (event.type==SDL_JOYBUTTONDOWN){
 			if (counter==0 ) {
@@ -361,8 +357,8 @@ void ss_prg_help(void)
 	{
 		drawSprite( help , screen , 0 , 0 , 0 , 0 , 640 , 480 );
 		//sq SDL_Flip(screen);
-		dispmanx_display();
-		
+		flipScreen();	
+	
 		SDL_PollEvent(&event);
 		if (event.type==SDL_JOYBUTTONDOWN){
 			if (counter==0) Hquit = 1 ;
@@ -391,7 +387,7 @@ void init_title(void)
 		bar = SDL_LoadBMP( "./skin/capex_selector.bmp" );
 		fclose(fp);
 	}
-	SDL_SetColorKey(bar ,SDL_SRCCOLORKEY,SDL_MapRGB(bar ->format,255,0,255));
+	SDL_SetColorKey(bar ,SDL_TRUE, SDL_MapRGB(bar ->format,255,0,255));
 	
 	//load title/icon
 	if ((fp = fopen( "./skin/capex_title.bmp" , "r")) != NULL){
@@ -412,7 +408,7 @@ void init_title(void)
 	
 	SDL_FreeRW (rw);
 	//sq set transparent colour to black
-	SDL_SetColorKey(font,SDL_SRCCOLORKEY,SDL_MapRGB(font->format,0,0,0));
+	SDL_SetColorKey(font, SDL_TRUE, SDL_MapRGB(font->format,0,0,0));
 
 	screen = SDL_CreateRGBSurface(SDL_SWSURFACE, 640, 480, 16, 0xf800, 0x07e0, 0x001f, 0x0000);
 	bg_temp = SDL_CreateRGBSurface(SDL_SWSURFACE, 640, 480, 16, 0xf800, 0x07e0, 0x001f, 0x0000);
@@ -566,8 +562,8 @@ void ss_prg_options(void)
 		}
 
 		//SDL_Flip(screen);
-		dispmanx_display();
-        
+		flipScreen();       
+ 
         usleep(70000);
         
         while(1)
@@ -716,8 +712,8 @@ void ss_prog_run(void)
     }
 
     free_memory();
- 	dispmanx_deinit();	
-	SDL_JoystickClose(0);
+    SDL_JoystickClose(0);
+    freeSDL();
     SDL_Quit();
 
 	//Run FBA and wait
@@ -837,7 +833,6 @@ int main(int argc, char *argv[])
 		pi_initialize_input();
 
 		initSDL();
-		dispmanx_init();
 	
 		load_cfg();
 		init_title();
@@ -920,9 +915,9 @@ int main(int argc, char *argv[])
 //exit_prog();
 }
 			
-			//SDL_Flip(screen);
-			dispmanx_display();
-	        
+		//SDL_Flip(screen);
+		flipScreen();	        
+
 	        usleep(70000);
 	   
 	        while(1)
@@ -1153,10 +1148,10 @@ static void fe_ProcessEvents (void)
                 break;
 
             case SDL_KEYDOWN:
-                sdl_keys = SDL_GetKeyState(NULL);
+                sdl_keys = SDL_GetKeyboardState(NULL);
                 break;
             case SDL_KEYUP:
-                sdl_keys = SDL_GetKeyState(NULL);
+                sdl_keys = SDL_GetKeyboardState(NULL);
                 break;
         }
     }
@@ -1201,91 +1196,52 @@ unsigned long pi_joystick_read(void)
     return(val);
 }
 
+#define FRAME_WIDTH 640
+#define FRAME_HEIGHT 480
 
-DISPMANX_RESOURCE_HANDLE_T fe_resource;
-DISPMANX_ELEMENT_HANDLE_T fe_element;
-DISPMANX_DISPLAY_HANDLE_T fe_display;
-DISPMANX_UPDATE_HANDLE_T fe_update;
+SDL_Window *window;
+SDL_Renderer *renderer;
+SDL_Texture *texture;
 
 static void initSDL(void)
 {
-	//Initialise everything SDL
-    if (SDL_Init(SDL_INIT_JOYSTICK) < 0 )
+    //Initialise everything SDL
+    if (SDL_Init(SDL_INIT_VIDEO|SDL_INIT_JOYSTICK) < 0 )
     {
         printf("Could not initialize SDL(%s)\n", SDL_GetError());
         exit(1);
     }
 
-    screen = SDL_SetVideoMode(0, 0, 16, SDL_SWSURFACE);
-	joy[0] = SDL_JoystickOpen(0);
+    screen = SDL_CreateRGBSurface(0, FRAME_WIDTH, FRAME_HEIGHT, 16, 0,0,0,0);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "linear"); 
+    // Since we're going fullscreen, w and h parameters are going to be ignored anyway.
+    window = SDL_CreateWindow(
+        	"Mini vMac", 0, 0, 0, 0, 
+        	SDL_WINDOW_FULLSCREEN_DESKTOP);
+    renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+	
+    texture = SDL_CreateTexture(renderer,
+        SDL_PIXELFORMAT_RGB565,
+        SDL_TEXTUREACCESS_STREAMING,
+        FRAME_WIDTH, FRAME_HEIGHT);
 
-    SDL_EventState(SDL_ACTIVEEVENT,SDL_IGNORE);
+    joy[0] = SDL_JoystickOpen(0);
+
+    SDL_EventState(SDL_WINDOWEVENT,SDL_IGNORE);
     SDL_EventState(SDL_SYSWMEVENT,SDL_IGNORE);
-    SDL_EventState(SDL_VIDEORESIZE,SDL_IGNORE);
     SDL_EventState(SDL_USEREVENT,SDL_IGNORE);
     SDL_ShowCursor(SDL_DISABLE);
 }
 
-static void dispmanx_init(void)
-{
-    int ret;
-    uint32_t crap;
-    uint32_t display_width=0, display_height=0;
-
-    VC_RECT_T dst_rect;
-    VC_RECT_T src_rect;
-
-    bcm_host_init();
-
-    graphics_get_display_size(0 /* LCD */, &display_width, &display_height);
-
-    fe_display = vc_dispmanx_display_open( 0 );
-
-    fe_resource = vc_dispmanx_resource_create(VC_IMAGE_RGB565, 640, 480, &crap);
-
-    //sq vc_dispmanx_rect_set( &dst_rect, 0, 0, display_width, display_height);
-    vc_dispmanx_rect_set( &dst_rect, options.display_border, options.display_border, 
-						display_width-(options.display_border*2), display_height-(options.display_border*2));
-    vc_dispmanx_rect_set( &src_rect, 0, 0, 640 << 16, 480 << 16);
-
-    //Make sure mame and background overlay the menu program
-    fe_update = vc_dispmanx_update_start( 0 );
-
-    // create the 'window' element - based on the first buffer resource (resource0)
-    fe_element = vc_dispmanx_element_add(  fe_update,
-           fe_display, 1, &dst_rect, fe_resource, &src_rect,
-           DISPMANX_PROTECTION_NONE, 0, 0, (DISPMANX_TRANSFORM_T) 0 );
-
-    ret = vc_dispmanx_update_submit_sync( fe_update );
-
+void freeSDL () {
+    SDL_DestroyTexture(texture);
+    SDL_DestroyRenderer(renderer);
+    SDL_DestroyWindow(window);
 }
 
-static void dispmanx_deinit(void)
-{
-    int ret;
-
-    fe_update = vc_dispmanx_update_start( 0 );
-    ret = vc_dispmanx_element_remove( fe_update, fe_element );
-    ret = vc_dispmanx_update_submit_sync( fe_update );
-    ret = vc_dispmanx_resource_delete( fe_resource );
-    ret = vc_dispmanx_display_close( fe_display );
-
-	bcm_host_deinit();
-}
-
-static void dispmanx_display(void)
-{
-    VC_RECT_T dst_rect;
-
-    vc_dispmanx_rect_set( &dst_rect, 0, 0, 640, 480 );
-
-    // begin display update
-    fe_update = vc_dispmanx_update_start( 0 );
-
-    // blit image to the current resource
-	SDL_LockSurface(screen);
-    vc_dispmanx_resource_write_data( fe_resource, VC_IMAGE_RGB565, screen->pitch, screen->pixels, &dst_rect );
-	SDL_UnlockSurface(screen);
-
-    vc_dispmanx_update_submit_sync( fe_update );
+void flipScreen () {
+    SDL_UpdateTexture(texture, NULL, screen->pixels, FRAME_WIDTH * 2);
+    SDL_RenderClear(renderer);
+    SDL_RenderCopy(renderer, texture, NULL, NULL); //&src_rect, &dst_rect
+    SDL_RenderPresent(renderer);
 }

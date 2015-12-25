@@ -36,7 +36,7 @@
 
 //IMPORTANT, make sure this function is commented out at runtime
 //as it has a big performance impact!
-#define	SHOW_ERROR	//gles_show_error();
+#define	SHOW_ERROR	// gles_show_error();
 
 static const char* vertex_shader_prg =
     "uniform mat4 u_vp_matrix;                              \n"
@@ -97,10 +97,12 @@ extern CFG_OPTIONS config_options;
 
 void gles_show_error()
 {
-	GLenum error = GL_NO_ERROR;
+    GLenum error = GL_NO_ERROR;
     error = glGetError();
-    if (GL_NO_ERROR != error)
+    if (GL_NO_ERROR != error) {
         printf("GL Error %x encountered!\n", error);
+	exit (0);
+    }
 }
 
 static GLuint CreateShader(GLenum type, const char *shader_src)
@@ -302,10 +304,15 @@ void gles2_destroy()
 static void gles2_DrawQuad_16(const ShaderInfo *sh, GLuint p_textures[2])
 {
 	glUniform1i(sh->u_texture, 0); SHOW_ERROR
-
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); SHOW_ERROR 
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); SHOW_ERROR
-
+	
+	if (config_options.display_smooth_stretch) {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR); SHOW_ERROR 
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR); SHOW_ERROR
+	}
+	else {
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST); SHOW_ERROR 
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); SHOW_ERROR
+	}
 	glBindBuffer(GL_ARRAY_BUFFER, buffers[0]); SHOW_ERROR
 	glVertexAttribPointer(sh->a_position, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), NULL); SHOW_ERROR
 	glEnableVertexAttribArray(sh->a_position); SHOW_ERROR
