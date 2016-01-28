@@ -1,0 +1,19 @@
+Attempt to initialise 'Final Fight (World)'
+Set DIP Difficulty [22] = 0x00
+Screen Size: 384 x 224
+ff30-36.bin  ...  128Kb program  (OK)
+ff35-42.bin  ...  128Kb program  (OK)
+ff31-37.bin  ...  128Kb program  (OK)
+ff36-43.bin  ...  128Kb program  (OK)
+ff32-32m.bin ...  512Kb program  (OK)
+ff05-05m.bin ...  512Kb graphics  (OK)
+ff07-07m.bin ...  512Kb graphics  (OK)
+ff01-01m.bin ...  512Kb graphics  (OK)
+ff03-03m.bin ...  512Kb graphics  (OK)
+ff09-09.bin  ...   64Kb graphics  (OK)
+ff18-18.bin  ...  128Kb graphics  (OK)
+ff19-19.bin  ...  128Kb graphics  (OK)
+Lets go!
+Finished emulating
+---- Shutdown Finalburn Alpha plus ----
+

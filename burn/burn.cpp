@@ -31,7 +31,7 @@ unsigned int nCurrentFrame;			// Framecount for emulated game
 unsigned int nFramesEmulated;		// Counters for FPS	display
 unsigned int nFramesRendered;		//
 unsigned int nFramesRenderedTotal;		//
-bool bForce60Hz = true;
+bool bForce60Hz = false;
 int nBurnFPS = 6000;
 int nBurnCPUSpeedAdjust = 0x0100;	// CPU speed adjustment (clock * nBurnCPUSpeedAdjust / 0x0100)
 
@@ -542,8 +542,6 @@ extern "C" int BurnDrvInit()
 	}
 #endif
 
-	BurnSetRefreshRate(60.0);
-
 #ifndef OOPSWARE_FIX
 	CheatInit();
 #endif
@@ -655,12 +653,12 @@ int BurnUpdateProgress(double fProgress, const TCHAR* pszText, bool bAbs)
 }
 
 // ----------------------------------------------------------------------------
-
 int BurnSetRefreshRate(double dFrameRate)
 {
 	if (!bForce60Hz) {
 		nBurnFPS = (int)(100.0 * dFrameRate);
 	}
+	printf("SETTING internal emulator refreshRate: nBurnFPS %d\n", nBurnFPS);
 	SndInit();
 
 	return 0;

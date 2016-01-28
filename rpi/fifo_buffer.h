@@ -19,9 +19,19 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 
 #ifndef FIFO_BUF_TYPEDEF
 #define FIFO_BUF_TYPEDEF
+//typedef struct fifo_buffer fifo_buffer_t;
+struct fifo_buffer
+{
+   uint8_t *buffer;
+   size_t bufsize;
+   size_t first;
+   size_t end;
+};
+
 typedef struct fifo_buffer fifo_buffer_t;
 #endif
 
